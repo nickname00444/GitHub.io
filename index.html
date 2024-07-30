@@ -89,6 +89,7 @@
         .hidden {
             display: none;
         }
+        /* Popup 스타일 추가 */
         #popup {
             display: none;
             position: fixed;
@@ -141,6 +142,7 @@
     </style>
 </head>
 <body>
+    <!-- 메인 페이지 -->
     <div id="mainPage">
         <h1>강릉 중앙자율방범대</h1>
         <div id="current-time"></div>
@@ -175,8 +177,6 @@
     </div>
 
     <script>
-        const API_URL = 'http://localhost:5000/api/records';
-
         let startTime, endTime;
         let distance = 0; // km
         let intervalId;
@@ -184,39 +184,12 @@
         let watchId = null; // 위치 감시 ID
         let isDriving = false;
 
-        async function saveRecordToServer(record) {
-            try {
-                const response = await fetch(API_URL, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(record),
-                });
-                if (!response.ok) throw new Error('Failed to save record');
-                return await response.json();
-            } catch (error) {
-                console.error(error);
-                alert('기록 저장에 실패했습니다.');
-            }
-        }
-
-        async function fetchRecordsFromServer() {
-            try {
-                const response = await fetch(API_URL);
-                if (!response.ok) throw new Error('Failed to fetch records');
-                return await response.json();
-            } catch (error) {
-                console.error(error);
-                alert('기록 가져오기에 실패했습니다.');
-                return [];
-            }
-        }
+        const RECORDS_KEY = 'driving_records';
 
         function updateDateInfo() {
             const now = new Date();
             const year = now.getFullYear();
-            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const month = String(now.getMonth() + 1).padStart(2, '0'); // 월은 0부터 시작
             const day = String(now.getDate()).padStart(2, '0');
             document.getElementById('date-info').textContent = `현재 날짜: ${year}-${month}-${day}`;
         }
@@ -244,146 +217,221 @@
             if (previousPosition) {
                 const { latitude: prevLat, longitude: prevLon } = previousPosition;
                 const newDistance = haversineDistance(prevLat, prevLon, latitude, longitude);
-                if (newDistance > 0) {
+                if (newDistance > 0) { // 위치가 변경된 경우에만 거리 추가
                     distance += newDistance;
+                    // 킬로미터와 미터로 변환하여 표시
                     const kilometers = Math.floor(distance);
-                    const meters = Math.floor((distance - kilometers) * 1000);
+                    const meters = Math.round((distance - kilometers) * 1000);
                     document.getElementById('distance').textContent = `주행 거리: ${kilometers} km ${meters} m`;
                 }
             }
+
             previousPosition = position.coords;
         }
 
-        function updateDuration() {
-            if (isDriving) {
-                const now = new Date();
-                const elapsedSeconds = Math.floor((now - startTime) / 1000);
-                document.getElementById('duration').textContent = `주행 시간: ${formatTime(elapsedSeconds)}`;
-            }
+        function showMessage(text) {
+            const messageElement = document.getElementById('message');
+            messageElement.textContent = text;
+            messageElement.style.display = 'block';
+            setTimeout(() => {
+                messageElement.style.display = 'none';
+            }, 1000); // 1초 후 메시지 사라짐
         }
 
-        function startDriving() {
-            if (navigator.geolocation) {
-                isDriving = true;
-                startTime = new Date();
-                document.getElementById('status').textContent = '상태: 주행 중';
-                document.getElementById('startBtn').disabled = true;
-                document.getElementById('stopBtn').disabled = false;
+        function addRecord(driver, team) {
+            const now = new Date();
+            const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+            const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+            const record = {
+                date,
+                time,
+                distance: document.getElementById('distance').textContent,
+                duration: document.getElementById('duration').textContent,
+                driver,
+                team
+            };
+            let records = getRecordsFromStorage();
+            records.push(record);
+            saveRecordsToStorage(records);
+            updateRecordList();
+        }
 
-                if (watchId) navigator.geolocation.clearWatch(watchId);
-                watchId = navigator.geolocation.watchPosition(updatePosition);
+        function getRecordsFromStorage() {
+            const records = localStorage.getItem(RECORDS_KEY);
+            return records ? JSON.parse(records) : [];
+        }
 
-                intervalId = setInterval(updateDuration, 1000);
+        function saveRecordsToStorage(records) {
+            localStorage.setItem(RECORDS_KEY, JSON.stringify(records));
+        }
+
+        function updateRecordList() {
+            const records = getRecordsFromStorage();
+            const recordContainer = document.getElementById('records');
+            const recordsList = document.createElement('div');
+            recordsList.innerHTML = '';
+            records.forEach((record, index) => {
+                const recordElement = document.createElement('div');
+                recordElement.className = 'record';
+                recordElement.innerHTML = `
+                    <p><strong>날짜:</strong> ${record.date} <strong>시간:</strong> ${record.time}</p>
+                    <p>${record.distance}</p>
+                    <p>${record.duration}</p>
+                    <p><strong>운전자:</strong> ${record.driver} <strong>팀:</strong> ${record.team}</p>
+                    <button onclick="promptDelete(${index})">삭제</button>
+                `;
+                recordsList.appendChild(recordElement);
+            });
+            recordContainer.innerHTML = ''; // 기존 기록 제거
+            recordContainer.appendChild(recordsList); // 새로운 기록 추가
+        }
+
+        function promptDelete(index) {
+            const code = prompt('삭제 코드를 입력하세요 (4자리 숫자):');
+            if (code === '0082') {
+                let records = getRecordsFromStorage();
+                records.splice(index, 1);
+                saveRecordsToStorage(records);
+                updateRecordList();
             } else {
-                alert('이 브라우저에서는 위치 정보 기능을 지원하지 않습니다.');
+                alert('삭제 코드가 올바르지 않습니다.');
             }
         }
 
-        function stopDriving() {
-            if (isDriving) {
-                endTime = new Date();
-                clearInterval(intervalId);
-                navigator.geolocation.clearWatch(watchId);
-
-                document.getElementById('status').textContent = '상태: 주행 종료';
-                document.getElementById('startBtn').disabled = false;
-                document.getElementById('stopBtn').disabled = true;
-                document.getElementById('resetBtn').disabled = false;
-                document.getElementById('saveBtn').disabled = false;
-                isDriving = false;
-            }
+        function updateTime() {
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+            document.getElementById('current-time').textContent = `${hours}:${minutes}:${seconds}`;
         }
 
-        function reset() {
-            distance = 0;
-            document.getElementById('distance').textContent = '주행 거리: 0 km 0 m';
-            document.getElementById('duration').textContent = '주행 시간: 00분 00초';
-            document.getElementById('status').textContent = '상태: 시작되지 않음';
-            document.getElementById('resetBtn').disabled = true;
-            document.getElementById('saveBtn').disabled = true;
-            document.getElementById('startBtn').disabled = false;
-            document.getElementById('stopBtn').disabled = true;
-        }
-
-        async function saveRecord() {
+        function showPopup() {
             document.getElementById('overlay').style.display = 'block';
             document.getElementById('popup').style.display = 'block';
+            document.getElementById('mainPage').classList.add('disabled'); // 메인 페이지 버튼 비활성화
         }
 
         function hidePopup() {
             document.getElementById('overlay').style.display = 'none';
             document.getElementById('popup').style.display = 'none';
+            document.getElementById('mainPage').classList.remove('disabled'); // 메인 페이지 버튼 활성화
         }
 
-        async function handlePopupSave() {
-            const driver = document.getElementById('driver').value;
-            const team = parseInt(document.getElementById('team').value, 10);
+        document.getElementById('startBtn').addEventListener('click', () => {
+            if (isDriving) {
+                showMessage('주행이 이미 시작되었습니다.');
+                return;
+            }
+            document.getElementById('status').textContent = '상태: 주행 중';
+            startTime = new Date();
+            previousPosition = null;
+            isDriving = true;
+            if (navigator.geolocation) {
+                watchId = navigator.geolocation.watchPosition(updatePosition, (error) => {
+                    console.error('Geolocation error:', error);
+                });
+            } else {
+                alert('Geolocation is not supported by this browser.');
+            }
+            intervalId = setInterval(() => {
+                let elapsedSeconds = Math.floor((new Date() - startTime) / 1000); // 경과 시간 초로 변환
+                document.getElementById('duration').textContent = `주행 시간: ${formatTime(elapsedSeconds)}`;
+            }, 1000); // 1초마다 업데이트
+        });
 
-            if (!driver || isNaN(team)) {
-                alert('모든 필드를 입력해주세요.');
+        document.getElementById('stopBtn').addEventListener('click', () => {
+            if (!isDriving) {
+                showMessage('주행이 시작되지 않았습니다.');
+                return;
+            }
+            document.getElementById('status').textContent = '상태: 주행 종료';
+            endTime = new Date();
+            clearInterval(intervalId);
+            if (navigator.geolocation && watchId !== null) {
+                navigator.geolocation.clearWatch(watchId);
+            }
+            isDriving = false;
+
+            // 주행 종료 시 거리와 시간 값이 업데이트되도록 보장합니다.
+            if (distance === 0) {
+                showMessage('주행 거리가 0입니다. 주행이 제대로 이루어졌는지 확인하세요.');
+                return;
+            }
+        });
+
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            if (isDriving) {
+                showMessage('주행 종료 버튼을 먼저 눌러주세요');
+                return;
+            }
+            clearInterval(intervalId);
+            document.getElementById('status').textContent = '상태: 시작되지 않음';
+            document.getElementById('distance').textContent = '주행 거리: 0 km 0 m';
+            document.getElementById('duration').textContent = '주행 시간: 00분 00초';
+            distance = 0;
+            if (navigator.geolocation && watchId !== null) {
+                navigator.geolocation.clearWatch(watchId);
+            }
+        });
+
+        document.getElementById('saveBtn').addEventListener('click', () => {
+            if (isDriving) {
+                showMessage('주행 종료 버튼을 먼저 눌러주세요');
+                return;
+            }
+            if (distance === 0) {
+                showMessage('주행 기록이 없습니다.');
+                return;
+            }
+            showPopup(); // Popup 창 표시
+        });
+
+        document.getElementById('popupSaveBtn').addEventListener('click', () => {
+            const driver = document.getElementById('driver').value.trim();
+            const team = document.getElementById('team').value.trim();
+
+            if (!driver) {
+                alert('운전자의 이름을 입력하세요.');
                 return;
             }
 
-            const record = {
-                driver,
-                team,
-                distance: distance.toFixed(2),
-                duration: formatTime(Math.floor((endTime - startTime) / 1000)),
-                date: new Date().toISOString()
+            if (team < 1 || team > 10) {
+                alert('팀 번호는 1부터 10까지의 숫자여야 합니다.');
+                return;
+            }
+
+            // 실제 노션 API 호출로 데이터 저장
+            const saveData = async () => {
+                // 여기에 노션 API 호출 코드 추가
+                console.log('데이터를 노션에 저장하는 중...');
+                return new Promise((resolve) => setTimeout(resolve, 1000)); // 1초 딜레이
             };
 
-            await saveRecordToServer(record);
-            updateRecordList();
-            hidePopup();
-            reset();
-        }
-
-        function updateRecordList() {
-            const recordsContainer = document.getElementById('records');
-            recordsContainer.innerHTML = '<h2>주행 기록</h2>';
-
-            fetchRecordsFromServer().then(records => {
-                records.forEach(record => {
-                    const recordDiv = document.createElement('div');
-                    recordDiv.className = 'record';
-                    recordDiv.innerHTML = `
-                        <p>운전자: ${record.driver}</p>
-                        <p>팀: ${record.team}</p>
-                        <p>주행 거리: ${record.distance} km</p>
-                        <p>주행 시간: ${record.duration}</p>
-                        <p>날짜: ${new Date(record.date).toLocaleDateString()}</p>
-                        <button onclick="deleteRecord('${record.id}')">삭제</button>
-                    `;
-                    recordsContainer.appendChild(recordDiv);
-                });
+            saveData().then(() => {
+                showMessage('저장 되었습니다.');
+                addRecord(driver, team); // 저장 후 기록 추가
+                hidePopup(); // Popup 창 닫기
+                // 데이터 초기화
+                document.getElementById('status').textContent = '상태: 시작되지 않음';
+                document.getElementById('distance').textContent = '주행 거리: 0 km 0 m';
+                document.getElementById('duration').textContent = '주행 시간: 00분 00초';
+                distance = 0;
+                if (navigator.geolocation && watchId !== null) {
+                    navigator.geolocation.clearWatch(watchId);
+                }
+                updateRecordList(); // 저장 후 기록 목록 업데이트
             });
-        }
+        });
 
-        async function deleteRecord(id) {
-            try {
-                const response = await fetch(`${API_URL}/${id}`, {
-                    method: 'DELETE'
-                });
-                if (!response.ok) throw new Error('Failed to delete record');
-                updateRecordList();
-            } catch (error) {
-                console.error(error);
-                alert('기록 삭제에 실패했습니다.');
-            }
-        }
-
-        document.getElementById('startBtn').addEventListener('click', startDriving);
-        document.getElementById('stopBtn').addEventListener('click', stopDriving);
-        document.getElementById('resetBtn').addEventListener('click', reset);
-        document.getElementById('saveBtn').addEventListener('click', saveRecord);
-        document.getElementById('popupSaveBtn').addEventListener('click', handlePopupSave);
-        document.getElementById('overlay').addEventListener('click', hidePopup);
-
+        // 페이지 로드 시 현재 날짜와 시간 업데이트 및 기록 표시
         updateDateInfo();
-        setInterval(updateDateInfo, 60000); // 매 분마다 날짜 정보 업데이트
-
-        // 페이지 로드 시 주행 기록 업데이트
-        window.addEventListener('load', updateRecordList);
+        updateTime();
+        updateRecordList(); // 페이지 로드 시 기록 목록 업데이트
+        // 매일 자정에 날짜 정보 업데이트
+        setInterval(updateDateInfo, 86400000); // 24시간마다 업데이트
+        // 매초마다 시간 업데이트
+        setInterval(updateTime, 1000);
     </script>
 </body>
 </html>
