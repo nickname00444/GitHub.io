@@ -7,30 +7,43 @@
     <style>
         body {
             font-family: Arial, sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
             margin: 0;
+            padding: 0;
             background-color: #f0f0f0;
-            text-align: center;
+            overflow: auto;
+            height: 100vh;
         }
-        h1 {
+        .header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 20px;
+            background-color: #fff;
+            border-bottom: 1px solid #ccc;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            z-index: 1000;
+            text-align: center;
+            box-sizing: border-box;
+        }
+        .header h1 {
+            margin: 0;
             font-size: 22px;
-            margin-bottom: 10px;
             color: #333;
         }
-        #current-time {
+        .header #current-time {
             font-size: 20px;
             font-weight: bold;
             color: #333;
-            margin-bottom: 10px;
         }
-        #date-info {
+        .header #date-info {
             font-size: 16px;
             margin-bottom: 20px;
             color: #666;
+        }
+        .main-content {
+            padding: 20px;
+            margin-top: 100px;
         }
         button {
             font-size: 18px;
@@ -38,45 +51,33 @@
             margin: 10px;
             cursor: pointer;
             color: #fff;
-            background-color: #007bff; /* 파란색 버튼 */
+            background-color: #007bff;
             border: none;
             border-radius: 5px;
             transition: background-color 0.3s;
         }
         button:hover {
-            background-color: #0056b3; /* 버튼 호버 시 색상 */
+            background-color: #0056b3;
         }
         .info {
             font-size: 18px;
             margin-top: 20px;
         }
-        #message {
-            display: none;
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            padding: 20px;
-            background: white;
-            border: 1px solid #ccc;
-            box-shadow: 0 0 10px rgba(0,0,0,0.2);
-            font-size: 16px;
-            color: green;
-        }
-        #controls {
-            margin-top: 20px;
-        }
         #records {
-            width: 80%;
-            max-width: 800px;
-            margin: 20px auto;
-            text-align: left;
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            background-color: #fff;
+            max-height: 400px;
+            overflow-y: auto;
         }
         .record {
             border: 1px solid black;
             padding: 10px;
             margin-bottom: 10px;
             position: relative;
+            background: #fafafa;
         }
         .record button {
             position: absolute;
@@ -86,10 +87,6 @@
             background-color: red;
             color: white;
         }
-        .hidden {
-            display: none;
-        }
-        /* Popup 스타일 추가 */
         #popup {
             display: none;
             position: fixed;
@@ -142,23 +139,25 @@
     </style>
 </head>
 <body>
-    <!-- 메인 페이지 -->
-    <div id="mainPage">
+    <!-- 상단 고정 헤더 -->
+    <div class="header">
         <h1>강릉 중앙자율방범대</h1>
         <div id="current-time"></div>
         <div id="date-info"></div>
-        <button id="startBtn">주행 시작</button>
-        <button id="stopBtn">주행 종료</button>
-        <div class="info">
-            <p id="status">상태: 시작되지 않음</p>
-            <p id="distance">주행 거리: 0 km 0 m</p>
-            <p id="duration">주행 시간: 00분 00초</p>
-        </div>
+    </div>
+
+    <!-- 메인 콘텐츠 영역 -->
+    <div class="main-content">
+        <div id="status">상태: 시작되지 않음</div>
+        <div id="distance">주행 거리: 0 km 0 m</div>
+        <div id="duration">주행 시간: 00분 00초</div>
+        <div id="speed">현재 속도: 0 km/h</div>
         <div id="controls">
+            <button id="startBtn">주행 시작</button>
+            <button id="stopBtn">주행 종료</button>
             <button id="resetBtn">초기화</button>
             <button id="saveBtn">저장</button>
         </div>
-        <div id="message"></div>
         <div id="records">
             <h2>주행 기록</h2>
             <!-- 기록은 이곳에 동적으로 추가됨 -->
@@ -177,11 +176,14 @@
     </div>
 
     <script>
+        // JavaScript 코드
         let startTime, endTime;
         let distance = 0; // km
         let intervalId;
         let previousPosition = null;
         let watchId = null; // 위치 감시 ID
+        let totalDistance = 0; // 총 거리
+        let totalTime = 0; // 총 시간
         let isDriving = false;
 
         const RECORDS_KEY = 'driving_records';
@@ -189,7 +191,7 @@
         function updateDateInfo() {
             const now = new Date();
             const year = now.getFullYear();
-            const month = String(now.getMonth() + 1).padStart(2, '0'); // 월은 0부터 시작
+            const month = String(now.getMonth() + 1).padStart(2, '0');
             const day = String(now.getDate()).padStart(2, '0');
             document.getElementById('date-info').textContent = `현재 날짜: ${year}-${month}-${day}`;
         }
@@ -212,21 +214,30 @@
         }
 
         function updatePosition(position) {
-            const { latitude, longitude } = position.coords;
+            const { latitude, longitude, speed } = position.coords;
 
             if (previousPosition) {
                 const { latitude: prevLat, longitude: prevLon } = previousPosition;
                 const newDistance = haversineDistance(prevLat, prevLon, latitude, longitude);
-                if (newDistance > 0) { // 위치가 변경된 경우에만 거리 추가
-                    distance += newDistance;
-                    // 킬로미터와 미터로 변환하여 표시
-                    const kilometers = Math.floor(distance);
-                    const meters = Math.round((distance - kilometers) * 1000);
+                if (newDistance > 0) {
+                    totalDistance += newDistance;
+                    const kilometers = Math.floor(totalDistance);
+                    const meters = Math.round((totalDistance - kilometers) * 1000);
                     document.getElementById('distance').textContent = `주행 거리: ${kilometers} km ${meters} m`;
                 }
             }
 
             previousPosition = position.coords;
+
+            const speedInKmPerHour = speed * 3.6;
+            document.getElementById('speed').textContent = `현재 속도: ${speedInKmPerHour.toFixed(1)} km/h`;
+        }
+
+        function calculateAverageSpeed() {
+            if (totalTime > 0) {
+                return (totalDistance / (totalTime / 3600)).toFixed(1); // 평균 속도 km/h
+            }
+            return 0;
         }
 
         function showMessage(text) {
@@ -239,199 +250,136 @@
         }
 
         function addRecord(driver, team) {
-            const now = new Date();
-            const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-            const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
-            const record = {
-                date,
-                time,
-                distance: document.getElementById('distance').textContent,
+            const averageSpeed = calculateAverageSpeed();
+            const records = JSON.parse(localStorage.getItem(RECORDS_KEY)) || [];
+            records.push({
+                date: new Date().toLocaleString(),
+                distance,
                 duration: document.getElementById('duration').textContent,
+                averageSpeed,
                 driver,
                 team
-            };
-            let records = getRecordsFromStorage();
-            records.push(record);
-            saveRecordsToStorage(records);
-            updateRecordList();
-        }
-
-        function getRecordsFromStorage() {
-            const records = localStorage.getItem(RECORDS_KEY);
-            return records ? JSON.parse(records) : [];
-        }
-
-        function saveRecordsToStorage(records) {
+            });
             localStorage.setItem(RECORDS_KEY, JSON.stringify(records));
+            displayRecords();
         }
 
-        function updateRecordList() {
-            const records = getRecordsFromStorage();
-            const recordContainer = document.getElementById('records');
-            const recordsList = document.createElement('div');
-            recordsList.innerHTML = '';
-            records.forEach((record, index) => {
+        function displayRecords() {
+            const records = JSON.parse(localStorage.getItem(RECORDS_KEY)) || [];
+            const recordsContainer = document.getElementById('records');
+            recordsContainer.innerHTML = '<h2>주행 기록</h2>';
+            records.forEach(record => {
                 const recordElement = document.createElement('div');
                 recordElement.className = 'record';
                 recordElement.innerHTML = `
-                    <p><strong>날짜:</strong> ${record.date} <strong>시간:</strong> ${record.time}</p>
-                    <p>${record.distance}</p>
-                    <p>${record.duration}</p>
-                    <p><strong>운전자:</strong> ${record.driver} <strong>팀:</strong> ${record.team}</p>
-                    <button onclick="promptDelete(${index})">삭제</button>
+                    <strong>운전자:</strong> ${record.driver} <br>
+                    <strong>팀:</strong> ${record.team} <br>
+                    <strong>날짜:</strong> ${record.date} <br>
+                    <strong>주행 거리:</strong> ${Math.floor(record.distance)} km ${Math.round((record.distance - Math.floor(record.distance)) * 1000)} m <br>
+                    <strong>주행 시간:</strong> ${record.duration} <br>
+                    <strong>평균 속도:</strong> ${record.averageSpeed} km/h
+                    <button onclick="deleteRecord(this)">삭제</button>
                 `;
-                recordsList.appendChild(recordElement);
+                recordsContainer.appendChild(recordElement);
             });
-            recordContainer.innerHTML = ''; // 기존 기록 제거
-            recordContainer.appendChild(recordsList); // 새로운 기록 추가
         }
 
-        function promptDelete(index) {
-            const code = prompt('삭제 코드를 입력하세요 (4자리 숫자):');
-            if (code === '0082') {
-                let records = getRecordsFromStorage();
-                records.splice(index, 1);
-                saveRecordsToStorage(records);
-                updateRecordList();
-            } else {
-                alert('삭제 코드가 올바르지 않습니다.');
-            }
-        }
-
-        function updateTime() {
-            const now = new Date();
-            const hours = String(now.getHours()).padStart(2, '0');
-            const minutes = String(now.getMinutes()).padStart(2, '0');
-            const seconds = String(now.getSeconds()).padStart(2, '0');
-            document.getElementById('current-time').textContent = `${hours}:${minutes}:${seconds}`;
-        }
-
-        function showPopup() {
-            document.getElementById('overlay').style.display = 'block';
-            document.getElementById('popup').style.display = 'block';
-            document.getElementById('mainPage').classList.add('disabled'); // 메인 페이지 버튼 비활성화
-        }
-
-        function hidePopup() {
-            document.getElementById('overlay').style.display = 'none';
-            document.getElementById('popup').style.display = 'none';
-            document.getElementById('mainPage').classList.remove('disabled'); // 메인 페이지 버튼 활성화
+        function deleteRecord(button) {
+            const recordElement = button.parentElement;
+            const recordIndex = Array.from(recordElement.parentElement.children).indexOf(recordElement) - 1;
+            const records = JSON.parse(localStorage.getItem(RECORDS_KEY)) || [];
+            records.splice(recordIndex, 1);
+            localStorage.setItem(RECORDS_KEY, JSON.stringify(records));
+            displayRecords();
         }
 
         document.getElementById('startBtn').addEventListener('click', () => {
-            if (isDriving) {
-                showMessage('주행이 이미 시작되었습니다.');
-                return;
-            }
-            document.getElementById('status').textContent = '상태: 주행 중';
-            startTime = new Date();
-            previousPosition = null;
-            isDriving = true;
             if (navigator.geolocation) {
-                watchId = navigator.geolocation.watchPosition(updatePosition, (error) => {
-                    console.error('Geolocation error:', error);
-                });
+                watchId = navigator.geolocation.watchPosition(updatePosition, error => {
+                    console.error(error);
+                    showMessage('위치 정보를 가져오는 데 실패했습니다.');
+                }, { enableHighAccuracy: true });
+                startTime = new Date();
+                totalTime = 0; // 주행 시작 시 총 시간 초기화
+                intervalId = setInterval(() => {
+                    const now = new Date();
+                    totalTime = Math.floor((now - startTime) / 1000); // 총 시간 초 단위
+                    document.getElementById('duration').textContent = `주행 시간: ${formatTime(totalTime)}`;
+                }, 1000);
+                document.getElementById('status').textContent = '상태: 주행 중';
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('stopBtn').disabled = false;
+                document.getElementById('resetBtn').disabled = false;
+                document.getElementById('saveBtn').disabled = false;
             } else {
-                alert('Geolocation is not supported by this browser.');
+                showMessage('이 브라우저는 위치 정보를 지원하지 않습니다.');
             }
-            intervalId = setInterval(() => {
-                let elapsedSeconds = Math.floor((new Date() - startTime) / 1000); // 경과 시간 초로 변환
-                document.getElementById('duration').textContent = `주행 시간: ${formatTime(elapsedSeconds)}`;
-            }, 1000); // 1초마다 업데이트
         });
 
         document.getElementById('stopBtn').addEventListener('click', () => {
-            if (!isDriving) {
-                showMessage('주행이 시작되지 않았습니다.');
-                return;
-            }
-            document.getElementById('status').textContent = '상태: 주행 종료';
-            endTime = new Date();
-            clearInterval(intervalId);
-            if (navigator.geolocation && watchId !== null) {
+            if (watchId) {
                 navigator.geolocation.clearWatch(watchId);
+                watchId = null;
             }
-            isDriving = false;
-
-            // 주행 종료 시 거리와 시간 값이 업데이트되도록 보장합니다.
-            if (distance === 0) {
-                showMessage('주행 거리가 0입니다. 주행이 제대로 이루어졌는지 확인하세요.');
-                return;
-            }
+            clearInterval(intervalId);
+            intervalId = null;
+            endTime = new Date();
+            document.getElementById('status').textContent = '상태: 주행 종료';
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+            document.getElementById('resetBtn').disabled = false;
+            document.getElementById('saveBtn').disabled = false;
         });
 
         document.getElementById('resetBtn').addEventListener('click', () => {
-            if (isDriving) {
-                showMessage('주행 종료 버튼을 먼저 눌러주세요');
-                return;
-            }
-            clearInterval(intervalId);
-            document.getElementById('status').textContent = '상태: 시작되지 않음';
+            distance = 0;
+            totalDistance = 0;
+            totalTime = 0;
             document.getElementById('distance').textContent = '주행 거리: 0 km 0 m';
             document.getElementById('duration').textContent = '주행 시간: 00분 00초';
-            distance = 0;
-            if (navigator.geolocation && watchId !== null) {
-                navigator.geolocation.clearWatch(watchId);
+            document.getElementById('speed').textContent = '현재 속도: 0 km/h';
+            if (intervalId) {
+                clearInterval(intervalId);
+                intervalId = null;
             }
+            if (watchId) {
+                navigator.geolocation.clearWatch(watchId);
+                watchId = null;
+            }
+            previousPosition = null;
+            document.getElementById('status').textContent = '상태: 시작되지 않음';
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+            document.getElementById('resetBtn').disabled = true;
+            document.getElementById('saveBtn').disabled = true;
         });
 
         document.getElementById('saveBtn').addEventListener('click', () => {
-            if (isDriving) {
-                showMessage('주행 종료 버튼을 먼저 눌러주세요');
-                return;
-            }
-            if (distance === 0) {
-                showMessage('주행 기록이 없습니다.');
-                return;
-            }
-            showPopup(); // Popup 창 표시
+            document.getElementById('popup').style.display = 'block';
+            document.getElementById('overlay').style.display = 'block';
         });
 
         document.getElementById('popupSaveBtn').addEventListener('click', () => {
-            const driver = document.getElementById('driver').value.trim();
-            const team = document.getElementById('team').value.trim();
-
-            if (!driver) {
-                alert('운전자의 이름을 입력하세요.');
-                return;
+            const driver = document.getElementById('driver').value;
+            const team = document.getElementById('team').value;
+            if (driver && team) {
+                addRecord(driver, team);
+                document.getElementById('popup').style.display = 'none';
+                document.getElementById('overlay').style.display = 'none';
+                document.getElementById('driver').value = '';
+                document.getElementById('team').value = '';
+            } else {
+                showMessage('운전자의 이름과 팀 번호를 모두 입력해야 합니다.');
             }
-
-            if (team < 1 || team > 10) {
-                alert('팀 번호는 1부터 10까지의 숫자여야 합니다.');
-                return;
-            }
-
-            // 실제 노션 API 호출로 데이터 저장
-            const saveData = async () => {
-                // 여기에 노션 API 호출 코드 추가
-                console.log('데이터를 노션에 저장하는 중...');
-                return new Promise((resolve) => setTimeout(resolve, 1000)); // 1초 딜레이
-            };
-
-            saveData().then(() => {
-                showMessage('저장 되었습니다.');
-                addRecord(driver, team); // 저장 후 기록 추가
-                hidePopup(); // Popup 창 닫기
-                // 데이터 초기화
-                document.getElementById('status').textContent = '상태: 시작되지 않음';
-                document.getElementById('distance').textContent = '주행 거리: 0 km 0 m';
-                document.getElementById('duration').textContent = '주행 시간: 00분 00초';
-                distance = 0;
-                if (navigator.geolocation && watchId !== null) {
-                    navigator.geolocation.clearWatch(watchId);
-                }
-                updateRecordList(); // 저장 후 기록 목록 업데이트
-            });
         });
 
-        // 페이지 로드 시 현재 날짜와 시간 업데이트 및 기록 표시
+        document.getElementById('overlay').addEventListener('click', () => {
+            document.getElementById('popup').style.display = 'none';
+            document.getElementById('overlay').style.display = 'none';
+        });
+
         updateDateInfo();
-        updateTime();
-        updateRecordList(); // 페이지 로드 시 기록 목록 업데이트
-        // 매일 자정에 날짜 정보 업데이트
-        setInterval(updateDateInfo, 86400000); // 24시간마다 업데이트
-        // 매초마다 시간 업데이트
-        setInterval(updateTime, 1000);
+        displayRecords();
     </script>
 </body>
 </html>
