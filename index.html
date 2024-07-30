@@ -132,9 +132,40 @@
             background: rgba(0,0,0,0.5);
             z-index: 999;
         }
-        .disabled {
-            pointer-events: none;
-            opacity: 0.6;
+        #delete-popup {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 20px;
+            background: white;
+            border: 1px solid #ccc;
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+            font-size: 16px;
+            color: #333;
+            z-index: 1001;
+        }
+        #delete-popup input {
+            font-size: 16px;
+            padding: 8px;
+            margin: 8px 0;
+            width: 100%;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        #delete-popup button {
+            font-size: 16px;
+            padding: 10px 20px;
+            color: #fff;
+            background-color: #007bff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        #delete-popup button:hover {
+            background-color: #0056b3;
         }
     </style>
 </head>
@@ -174,6 +205,14 @@
         <input type="number" id="team" placeholder="팀 번호를 입력하세요" min="1" max="10">
         <button id="popupSaveBtn">저장</button>
     </div>
+    
+    <!-- 삭제 비밀번호 확인 창 -->
+    <div id="delete-popup">
+        <h2>기록 삭제</h2>
+        <label for="delete-password">비밀번호:</label>
+        <input type="password" id="delete-password" placeholder="비밀번호를 입력하세요" maxlength="4">
+        <button id="confirmDeleteBtn">삭제</button>
+    </div>
 
     <script>
         // JavaScript 코드
@@ -187,6 +226,8 @@
         let isDriving = false;
 
         const RECORDS_KEY = 'driving_records';
+        const DELETE_PASSWORD = '0082';
+        let recordToDelete = null;
 
         function updateDateInfo() {
             const now = new Date();
@@ -278,14 +319,31 @@
                     <strong>주행 거리:</strong> ${Math.floor(record.distance)} km ${Math.round((record.distance - Math.floor(record.distance)) * 1000)} m <br>
                     <strong>주행 시간:</strong> ${record.duration} <br>
                     <strong>평균 속도:</strong> ${record.averageSpeed} km/h
-                    <button onclick="deleteRecord(this)">삭제</button>
+                    <button onclick="confirmDeleteRecord(this)">삭제</button>
                 `;
                 recordsContainer.appendChild(recordElement);
             });
         }
 
-        function deleteRecord(button) {
-            const recordElement = button.parentElement;
+        function confirmDeleteRecord(button) {
+            recordToDelete = button.parentElement;
+            document.getElementById('delete-popup').style.display = 'block';
+            document.getElementById('overlay').style.display = 'block';
+        }
+
+        document.getElementById('confirmDeleteBtn').addEventListener('click', () => {
+            const enteredPassword = document.getElementById('delete-password').value;
+            if (enteredPassword === DELETE_PASSWORD) {
+                deleteRecord(recordToDelete);
+                document.getElementById('delete-popup').style.display = 'none';
+                document.getElementById('overlay').style.display = 'none';
+                document.getElementById('delete-password').value = '';
+            } else {
+                showMessage('비밀번호가 잘못되었습니다.');
+            }
+        });
+
+        function deleteRecord(recordElement) {
             const recordIndex = Array.from(recordElement.parentElement.children).indexOf(recordElement) - 1;
             const records = JSON.parse(localStorage.getItem(RECORDS_KEY)) || [];
             records.splice(recordIndex, 1);
@@ -375,6 +433,7 @@
 
         document.getElementById('overlay').addEventListener('click', () => {
             document.getElementById('popup').style.display = 'none';
+            document.getElementById('delete-popup').style.display = 'none';
             document.getElementById('overlay').style.display = 'none';
         });
 
