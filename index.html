@@ -1,128 +1,130 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QR 코드 스캔</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-        }
-        #qr-reader {
-            width: 100%;
-            height: 400px;
-            margin-bottom: 20px;
-            display: none; /* 버튼 클릭 시에만 표시 */
-        }
-        .container {
-            max-width: 500px;
-            margin: 0 auto;
-            text-align: center;
-        }
-        input {
-            margin: 10px 0;
-            padding: 10px;
-            width: 80%;
-        }
-        button {
-            padding: 10px 20px;
-            font-size: 16px;
-            cursor: pointer;
-        }
-        .output-text {
-            font-size: 18px;
-            font-weight: bold;
-            margin: 10px 0;
-        }
-        .form-container {
-            margin-top: 20px;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <title>표독지수 상승</title>
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      text-align: center;
+      background-color: #f5f5f5;
+      padding: 50px;
+    }
+
+    h1 {
+      font-size: 48px;
+      color: black;
+      margin-bottom: 10px;
+    }
+
+    #percentage {
+      font-size: 36px;
+      margin-bottom: 30px;
+    }
+
+    .graph-container {
+      width: 80%;
+      height: 200px;
+      background: #ddd;
+      margin: 0 auto 30px;
+      position: relative;
+      overflow: hidden;
+      border-radius: 12px;
+    }
+
+    .graph-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #ff4d4d 0%, #ff0000 100%);
+      width: 0%;
+      transition: width 0.5s ease;
+    }
+
+    .button-container {
+      margin-top: 20px;
+    }
+
+    button {
+      padding: 10px 20px;
+      font-size: 18px;
+      margin: 0 10px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+
+    #increaseBtn {
+      background-color: #4CAF50;
+      color: white;
+    }
+
+    #increaseBtn:hover {
+      background-color: #45a049;
+    }
+
+    #resetBtn {
+      background-color: #f44336;
+      color: white;
+    }
+
+    #resetBtn:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
+    }
+
+    #resetBtn:hover:enabled {
+      background-color: #d32f2f;
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <h2>QR 코드 스캔</h2>
-        
-        <!-- QR 코드 스캔을 시작하는 버튼 -->
-        <button id="start-scan-btn">QR 코드 스캔 시작</button>
 
-        <!-- QR 코드 스캔 영역 -->
-        <div id="qr-reader"></div>
-        
-        <p id="scan-result">QR 코드 정보를 스캔하세요.</p>
+  <h1>표독지수</h1>
+  <div id="percentage">0%</div>
+  <div class="graph-container">
+    <div class="graph-fill" id="graph"></div>
+  </div>
 
-        <!-- 스캔된 정보를 표시하는 부분 -->
-        <div id="user-info" style="display:none;">
-            <div class="output-text">
-                <p><strong>이름:</strong> <span id="name-output"></span></p>
-            </div>
-            <div class="output-text">
-                <p><strong>팀:</strong> <span id="team-output"></span></p>
-            </div>
+  <div class="button-container">
+    <button id="increaseBtn">상승</button>
+    <button id="resetBtn" disabled>초기화</button>
+  </div>
 
-            <!-- 이름과 팀을 수정할 수 있는 입력 폼 -->
-            <div class="form-container">
-                <form id="input-form">
-                    <label for="name-input">이름을 입력하세요:</label>
-                    <input type="text" id="name-input" placeholder="이름을 입력해주세요">
-                    <label for="team-input">팀 번호를 입력하세요:</label>
-                    <input type="number" id="team-input" placeholder="팀 번호를 입력해주세요">
-                    <button type="submit">제출</button>
-                </form>
-            </div>
-        </div>
-    </div>
+  <script>
+    let current = 0;
+    const percentage = document.getElementById('percentage');
+    const graph = document.getElementById('graph');
+    const increaseBtn = document.getElementById('increaseBtn');
+    const resetBtn = document.getElementById('resetBtn');
 
-    <!-- HTML5 QR 코드 스캔 라이브러리 -->
-    <script src="https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js"></script>
-    <script>
-        // QR 코드 스캔 성공 시 처리
-        function onScanSuccess(decodedText, decodedResult) {
-            // 스캔된 QR 코드 데이터 처리 (예: 이름, 팀번호)
-            const data = decodedText.split(","); // 예: "이름,팀번호"
-            const name = data[0];
-            const team = data[1];
+    function updateDisplay() {
+      if (current >= 100) {
+        percentage.textContent = 'MAX';
+        graph.style.width = '100%';
+        increaseBtn.disabled = true;
+        resetBtn.disabled = false;
+      } else {
+        percentage.textContent = current + '%';
+        graph.style.width = current + '%';
+      }
+    }
 
-            // 이름과 팀 정보 표시
-            document.getElementById('name-output').textContent = name;
-            document.getElementById('team-output').textContent = team;
+    increaseBtn.addEventListener('click', () => {
+      if (current < 100) {
+        current += 5;
+        if (current > 100) current = 100;
+        updateDisplay();
+      }
+    });
 
-            // 폼을 표시
-            document.getElementById('user-info').style.display = 'block';
-            document.getElementById('scan-result').style.display = 'none';
-            
-            // QR 코드 스캔 멈추기
-            html5QrcodeScanner.clear();
-        }
-
-        // QR 코드 오류 처리
-        function onScanError(errorMessage) {
-            console.warn(errorMessage);
-        }
-
-        // QR 코드 스캔 시작 함수
-        function startQRCodeScan() {
-            // 버튼 클릭 시 QR 코드 스캔 시작
-            document.getElementById('qr-reader').style.display = 'block'; // QR 코드 읽기 영역 표시
-            document.getElementById('start-scan-btn').style.display = 'none'; // 버튼 숨기기
-
-            const html5QrcodeScanner = new Html5QrcodeScanner(
-                "qr-reader", 
-                { fps: 10, qrbox: 250 }
-            );
-            html5QrcodeScanner.render(onScanSuccess, onScanError);
-        }
-
-        // 버튼 클릭 시 QR 코드 스캔 시작
-        document.getElementById('start-scan-btn').addEventListener('click', startQRCodeScan);
-
-        // 폼 제출 시 처리 (이름과 팀 입력)
-        document.getElementById('input-form').addEventListener('submit', function(event) {
-            event.preventDefault();
-            const name = document.getElementById('name-input').value;
-            const team = document.getElementById('team-input').value;
-            alert(`입력된 이름: ${name}, 팀 번호: ${team}`);
-        });
-    </script>
+    resetBtn.addEventListener('click', () => {
+      current = 0;
+      updateDisplay();
+      percentage.textContent = '0%';
+      graph.style.width = '0%';
+      increaseBtn.disabled = false;
+      resetBtn.disabled = true;
+    });
+  </script>
 </body>
 </html>
